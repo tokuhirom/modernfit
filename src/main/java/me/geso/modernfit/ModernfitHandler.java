@@ -1,19 +1,15 @@
 package me.geso.modernfit;
 
-import me.geso.modernfit.annotation.DELETE;
 import me.geso.modernfit.annotation.GET;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.reactive.function.client.WebClient;
-import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class ModernfitHandler implements InvocationHandler {
     private WebClient webClient;
@@ -24,15 +20,18 @@ public class ModernfitHandler implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        WebClient.RequestHeadersUriSpec<?> requestHeadersUriSpec = processHttpMethod(method);
+        HttpMethod httpMethod = getHttpMethod(method);
+        WebClient.RequestBodyUriSpec requestHeadersUriSpec = webClient.method(httpMethod);
         WebClient.ResponseSpec responseSpec = requestHeadersUriSpec.retrieve();
         return processResponse(method, method.getGenericReturnType(), responseSpec);
         // TODO @Path
+        // TODO @Header
+        // TODO @Body
     }
 
     private Object processResponse(Method method, Type returnType, WebClient.ResponseSpec responseSpec) {
         if (returnType instanceof ParameterizedType) {
-            // Mono<T>
+            // e.g. Mono<T>
             String typeName = ((ParameterizedType) returnType).getRawType().getTypeName();
             if (typeName.equals("reactor.core.publisher.Mono")) {
                 Type typeArgument = (((ParameterizedType) returnType).getActualTypeArguments())[0];
@@ -42,6 +41,7 @@ public class ModernfitHandler implements InvocationHandler {
                 }
             }
         } else if (returnType instanceof Class) {
+            // e.g. String
             return responseSpec.bodyToMono(ParameterizedTypeReference.forType(returnType))
                     .block();
         }
@@ -49,11 +49,11 @@ public class ModernfitHandler implements InvocationHandler {
                 + method.getName() + "(" + returnType.getClass().getName() + ")");
     }
 
-    private WebClient.RequestHeadersUriSpec<?> processHttpMethod(Method method) {
+    private HttpMethod getHttpMethod(Method method) {
         for (Annotation annotation : method.getAnnotations()) {
             Class<? extends Annotation> httpMethod = annotation.annotationType();
             if (httpMethod == GET.class) {
-                return webClient.get();
+                return HttpMethod.GET;
             } else {
                 throw new IllegalStateException("Should not reach here");
             }
