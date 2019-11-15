@@ -20,8 +20,9 @@ public class ModernfitHandler implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        HttpMethod httpMethod = getHttpMethod(method);
-        WebClient.RequestBodyUriSpec requestHeadersUriSpec = webClient.method(httpMethod);
+        HttpMethodHolder httpMethod = getHttpMethod(method);
+        WebClient.RequestBodyUriSpec requestHeadersUriSpec = webClient.method(httpMethod.getHttpMethod());
+        requestHeadersUriSpec.uri(httpMethod.getPath());
         WebClient.ResponseSpec responseSpec = requestHeadersUriSpec.retrieve();
         return processResponse(method, method.getGenericReturnType(), responseSpec);
         // TODO @Path
@@ -49,11 +50,12 @@ public class ModernfitHandler implements InvocationHandler {
                 + method.getName() + "(" + returnType.getClass().getName() + ")");
     }
 
-    private HttpMethod getHttpMethod(Method method) {
+    private HttpMethodHolder getHttpMethod(Method method) {
         for (Annotation annotation : method.getAnnotations()) {
             Class<? extends Annotation> httpMethod = annotation.annotationType();
             if (httpMethod == GET.class) {
-                return HttpMethod.GET;
+                return new HttpMethodHolder(HttpMethod.GET, ((GET) annotation).value());
+                // TODO support other methods
             } else {
                 throw new IllegalStateException("Should not reach here");
             }
